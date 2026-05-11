@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sun, Earth & Moon - Primary Science Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            background: rgba(15, 20, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(8px);
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin: 0 0 10px 0;
+            color: #4da6ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        p.subtitle {
+            font-size: 0.85rem;
+            color: #aaaaaa;
+            margin-top: 0;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #4da6ff;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #2a3b5c;
+            color: white;
+            border: 1px solid #4da6ff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            flex: 1;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #4da6ff;
+            color: #000;
+        }
+        button.active {
+            background: #4da6ff;
+            color: #000;
+            font-weight: bold;
+        }
+        #info-panel {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-family: monospace;
+            color: #ffd700;
+            font-size: 0.95rem;
+        }
+        #legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(15, 20, 30, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .color-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .instruction {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            color: #ddd;
+        }
+    </style>
+    <!-- Import Three.js via ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <h1>Celestial Mechanics</h1>
+        <p class="subtitle">A teaching scale model of the Sun, Earth, and Moon. Sizes are exaggerated to fit the screen.</p>
+        
+        <div class="control-group">
+            <label>Simulation Speed</label>
+            <input type="range" id="speed-slider" min="0" max="10" step="0.1" value="1">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
+                <span>Paused</span>
+                <span>Fast</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Camera Focus</label>
+            <div class="btn-group">
+                <button id="cam-system" class="active">Solar System</button>
+                <button id="cam-earth">Follow Earth</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Angles & Toggles</label>
+            <div class="btn-group">
+                <button id="toggle-axis" class="active">Show Earth's Axis</button>
+                <button id="toggle-orbits" class="active">Show Orbits</button>
+            </div>
+        </div>
+
+        <div id="info-panel">
+            <div class="stat-row">
+                <span>Days Passed:</span>
+                <span id="days-counter" class="stat-value">0.0</span>
+            </div>
+            <div class="stat-row">
+                <span>Years Passed:</span>
+                <span id="years-counter" class="stat-value">0.00</span>
+            </div>
+            <p style="color: #88b8ff; margin-top: 15px; font-weight: bold;">Did you know?</p>
+            <p id="fact-text">Earth is tilted at 23.5°. This tilt is what causes our seasons as we orbit the Sun!</p>
+        </div>
+    </div>
+
+    <div id="legend">
+        <div class="legend-item"><div class="color-box" style="background: #ffcc00; box-shadow: 0 0 5px #ffcc00;"></div> Sun (Light Source)</div>
+        <div class="legend-item"><div class="color-box" style="background: #2266ff;"></div> Earth (Day/Night visible)</div>
+        <div class="legend-item"><div class="color-box" style="background: #aaaaaa;"></div> Moon</div>
+        <div class="legend-item"><div class="color-box" style="background: #ff0000; width: 2px; border-radius: 0;"></div> Earth's Axis (23.5°)</div>
+    </div>
+
+    <div class="instruction">
+        Mouse: Left Click to Rotate | Right Click to Pan | Scroll to Zoom
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration & Constants (Teaching Scale) ---
+        // True scale is impossible for a single screen view.
+        // E.g., Sun is 109x wider than Earth. Distance is 11,700x Earth's width.
+        const CONFIG = {
+            sunRadius: 12,
+            earthRadius: 4,
+            moonRadius: 1.2,
+            earthOrbitRadius: 70,
+            moonOrbitRadius: 15,
+            // Time Constants
+            earthYearDays: 365.25,
+            moonOrbitDays: 27.3,
+            earthDayRotation: 1,
+            // Angles (Radians)
+            earthAxialTilt: 23.5 * (Math.PI / 180),
+            moonOrbitalTilt: 5.14 * (Math.PI / 180) 
+        };
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Add Starry Background
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 0.8 });
+        const starsVertices = [];
+        for (let i = 0; i < 3000; i++) {
+            const x = (Math.random() - 0.5) * 600;
+            const y = (Math.random() - 0.5) * 600;
+            const z = (Math.random() - 0.5) * 600;
+            starsVertices.push(x, y, z);
+        }
+        starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+        const starField = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starField);
+
+        // Camera Setup
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 80, 120);
+
+        // Renderer Setup
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // Important for good lighting
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 400;
+
+        // --- Celestial Bodies ---
+
+        // 1. The Sun
+        const sunGroup = new THREE.Group();
+        scene.add(sunGroup);
+
+        const sunGeo = new THREE.SphereGeometry(CONFIG.sunRadius, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+        const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+        sunGroup.add(sunMesh);
+
+        // Sun Glow Effect
+        const glowGeo = new THREE.SphereGeometry(CONFIG.sunRadius * 1.2, 32, 32);
+        const glowMat = new THREE.MeshBasicMaterial({ 
+            color: 0xffaa00, 
+            transparent: true, 
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending
+        });
+        const sunGlow = new THREE.Mesh(glowGeo, glowMat);
+        sunGroup.add(sunGlow);
+
+        // Sun Light Source (Point light originating from the sun)
+        const sunLight = new THREE.PointLight(0xffffff, 2.5, 500);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunGroup.add(sunLight);
+
+        // Ambient Light (dim, to see the dark sides slightly)
+        const ambientLight = new THREE.AmbientLight(0x222233, 0.6);
+        scene.add(ambientLight);
+
+        // 2. Earth System
+        // We use a nested structure:
+        // earthOrbitPivot (centered at sun, handles yearly rotation)
+        // -> earthContainer (positioned at orbit radius, handles moon orbit)
+        //   -> earthMesh (handles daily rotation and axial tilt)
+        
+        const earthOrbitPivot = new THREE.Group();
+        scene.add(earthOrbitPivot);
+
+        const earthContainer = new THREE.Group();
+        earthContainer.position.x = CONFIG.earthOrbitRadius;
+        earthOrbitPivot.add(earthContainer);
+
+        // Earth Mesh (Blue and slightly glossy)
+        const earthGeo = new THREE.SphereGeometry(CONFIG.earthRadius, 32, 32);
+        const earthMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1166ff,
+            roughness: 0.4,
+            metalness: 0.1
+        });
+        const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+        earthMesh.castShadow = true;
+        earthMesh.receiveShadow = true;
+        
+        // Apply Axial Tilt to Earth
+        const earthTiltGroup = new THREE.Group();
+        earthTiltGroup.rotation.z = CONFIG.earthAxialTilt; 
+        earthTiltGroup.add(earthMesh);
+        earthContainer.add(earthTiltGroup);
+
+        // Add visual Axis Line
+        const axisGeo = new THREE.CylinderGeometry(0.1, 0.1, CONFIG.earthRadius * 3, 8);
+        const axisMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const axisMesh = new THREE.Mesh(axisGeo, axisMat);
+        earthTiltGroup.add(axisMesh); // Axis rotates with tilt, but not daily rotation
+
+        // 3. Moon System
+        const moonOrbitPivot = new THREE.Group();
+        // Moon's orbit is tilted relative to Earth's orbit (ecliptic)
+        moonOrbitPivot.rotation.x = CONFIG.moonOrbitalTilt;
+        earthContainer.add(moonOrbitPivot);
+
+        const moonGeo = new THREE.SphereGeometry(CONFIG.moonRadius, 32, 32);
+        const moonMat = new THREE.MeshStandardMaterial({ 
+            color: 0xaaaaaa,
+            roughness: 0.8,
+            metalness: 0.0
+        });
+        const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+        moonMesh.position.x = CONFIG.moonOrbitRadius;
+        moonMesh.castShadow = true;
+        moonMesh.receiveShadow = true;
+        moonOrbitPivot.add(moonMesh);
+
+        // --- Orbit Paths (Visual Lines) ---
+        const createOrbitLine = (radius, color = 0x445566) => {
+            const curve = new THREE.EllipseCurve(
+                0, 0,            // ax, aY
+                radius, radius,  // xRadius, yRadius
+                0, 2 * Math.PI,  // aStartAngle, aEndAngle
+                false,           // aClockwise
+                0                // aRotation
+            );
+            const points = curve.getPoints(100);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.5 });
+            const line = new THREE.Line(geometry, material);
+            line.rotation.x = Math.PI / 2; // Lay flat
+            return line;
+        };
+
+        const earthOrbitLine = createOrbitLine(CONFIG.earthOrbitRadius, 0x5588aa);
+        scene.add(earthOrbitLine);
+
+        const moonOrbitLine = createOrbitLine(CONFIG.moonOrbitRadius, 0x666666);
+        // Apply moon's orbital tilt to its drawn path as well
+        const moonOrbitLineContainer = new THREE.Group();
+        moonOrbitLineContainer.rotation.x = CONFIG.moonOrbitalTilt;
+        moonOrbitLineContainer.add(moonOrbitLine);
+        earthContainer.add(moonOrbitLineContainer);
+
+        // --- State Variables ---
+        let simTime = 0; // Represents "Days"
+        let isEarthFocus = false;
+        
+        // UI Elements
+        const speedSlider = document.getElementById('speed-slider');
+        const daysCounter = document.getElementById('days-counter');
+        const yearsCounter = document.getElementById('years-counter');
+        const factText = document.getElementById('fact-text');
+        
+        // Facts to cycle through based on time
+        const educationalFacts = [
+            "Earth completes one full rotation on its axis every 24 hours (1 Day).",
+            "Notice the shadow on Earth? That separates Day and Night.",
+            "Earth takes ~365.25 days to orbit the Sun (1 Year).",
+            "The Moon takes about 27.3 days to orbit the Earth.",
+            "Because Earth's axis is tilted (red line), we experience seasons!",
+            "Eclipses only happen when the Moon crosses the exact plane of Earth's orbit."
+        ];
+
+        // --- Interaction Logic ---
+        
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        document.getElementById('cam-system').addEventListener('click', (e) => {
+            isEarthFocus = false;
+            e.target.classList.add('active');
+            document.getElementById('cam-earth').classList.remove('active');
+            // Animate camera back to center
+            camera.position.set(0, 80, 120);
+            controls.target.set(0,0,0);
+        });
+
+        document.getElementById('cam-earth').addEventListener('click', (e) => {
+            isEarthFocus = true;
+            e.target.classList.add('active');
+            document.getElementById('cam-system').classList.remove('active');
+        });
+
+        document.getElementById('toggle-axis').addEventListener('click', (e) => {
+            axisMesh.visible = !axisMesh.visible;
+            e.target.classList.toggle('active');
+        });
+
+        document.getElementById('toggle-orbits').addEventListener('click', (e) => {
+            earthOrbitLine.visible = !earthOrbitLine.visible;
+            moonOrbitLineContainer.visible = !moonOrbitLineContainer.visible;
+            e.target.classList.toggle('active');
+        });
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const timeScale = parseFloat(speedSlider.value);
+            
+            // Advance simulation time
+            // timeScale of 1 means 1 day passes every second in real time
+            simTime += delta * timeScale;
+
+            // --- Update Rotations and Positions based on specific ratios ---
+            
+            // 1. Earth's Orbit around Sun (Year)
+            // 360 degrees (2 PI) / 365.25 days = radians per day
+            earthOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthYearDays);
+
+            // 2. Earth's Rotation on Axis (Day)
+            // 360 degrees (2 PI) / 1 day
+            earthMesh.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthDayRotation);
+
+            // 3. Moon's Orbit around Earth (Month)
+            moonOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.moonOrbitDays);
+
+            // 4. Moon's Synchronous Rotation (Always shows same face to Earth)
+            moonMesh.rotation.y = moonOrbitPivot.rotation.y;
+
+            // --- Camera Following Logic ---
+            if (isEarthFocus) {
+                // Get Earth's absolute position in world space
+                const earthWorldPos = new THREE.Vector3();
+                earthMesh.getWorldPosition(earthWorldPos);
+                
+                // Keep controls targeted on Earth
+                controls.target.copy(earthWorldPos);
+                
+                // Adjust camera position relative to Earth if it's too far
+                const dist = camera.position.distanceTo(earthWorldPos);
+                if (dist > 60 || dist < 10) {
+                     camera.position.set(
+                         earthWorldPos.x + 20, 
+                         earthWorldPos.y + 15, 
+                         earthWorldPos.z + 30
+                     );
+                }
+            }
+
+            // --- Update UI ---
+            daysCounter.innerText = simTime.toFixed(1);
+            yearsCounter.innerText = (simTime / CONFIG.earthYearDays).toFixed(2);
+
+            // Update educational facts dynamically
+            const factIndex = Math.floor(simTime / 30) % educationalFacts.length;
+            factText.innerText = educationalFacts[factIndex];
+
+            // Render
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Start the loop after window load
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
