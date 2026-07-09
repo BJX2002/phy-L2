@@ -56,7 +56,7 @@
         }
         h1 {
             font-size: 1.2rem;
-            margin: 0 0 10px 0;
+            margin: 0;
             color: #4da6ff;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -64,8 +64,9 @@
         .panel-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             gap: 12px;
+            margin-bottom: 16px;
         }
         #language-toggle {
             flex: 0 0 auto;
@@ -82,6 +83,21 @@
         }
         .control-group {
             margin-bottom: 15px;
+        }
+        .sim-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+        }
+        #sim-toggle,
+        #reset-sim {
+            width: 100%;
+            font-size: 0.95rem;
+            font-weight: bold;
+        }
+        #reset-sim {
+            min-width: 92px;
+            flex: 0 0 auto;
         }
         label {
             display: block;
@@ -143,6 +159,80 @@
             color: #ffd700;
             font-size: 0.95rem;
         }
+        #celestial-info {
+            position: absolute;
+            right: max(20px, env(safe-area-inset-right));
+            top: max(20px, env(safe-area-inset-top));
+            width: min(420px, calc(100vw - 40px));
+            min-width: 340px;
+            min-height: 150px;
+            max-width: calc(100vw - 40px);
+            max-height: calc(100dvh - 40px);
+            box-sizing: border-box;
+            background: rgba(12, 18, 30, 0.9);
+            border: 1px solid rgba(77, 166, 255, 0.45);
+            border-radius: 10px;
+            padding: 22px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            transform: translateY(-8px);
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            overflow: auto;
+            resize: both;
+        }
+        #celestial-info.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        #celestial-info.dragging {
+            transition: none;
+        }
+        #celestial-info::after {
+            content: "";
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            width: 14px;
+            height: 14px;
+            border-right: 2px solid rgba(77, 166, 255, 0.7);
+            border-bottom: 2px solid rgba(77, 166, 255, 0.7);
+            pointer-events: none;
+        }
+        .info-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 14px;
+            cursor: move;
+            touch-action: none;
+        }
+        #celestial-info h2 {
+            margin: 0;
+            font-size: 1.35rem;
+            color: #ffd36a;
+            letter-spacing: 0;
+        }
+        #info-close {
+            flex: 0 0 auto;
+            min-width: 36px;
+            min-height: 36px;
+            padding: 0;
+            line-height: 1;
+        }
+        #celestial-info ul {
+            margin: 0;
+            padding-left: 22px;
+            color: #e6eef8;
+            font-size: 1.12rem;
+            line-height: 1.55;
+        }
+        #celestial-info li + li {
+            margin-top: 6px;
+        }
         .instruction {
             position: absolute;
             bottom: max(20px, env(safe-area-inset-bottom));
@@ -185,6 +275,17 @@
                 margin-top: 14px;
                 padding-top: 12px;
             }
+            #celestial-info {
+                left: max(12px, env(safe-area-inset-left));
+                right: max(12px, env(safe-area-inset-right));
+                top: auto;
+                bottom: max(52px, calc(env(safe-area-inset-bottom) + 52px));
+                width: auto;
+                min-width: 0;
+                max-width: none;
+                max-height: calc(100dvh - 120px);
+                resize: vertical;
+            }
             .instruction {
                 bottom: max(10px, env(safe-area-inset-bottom));
             }
@@ -216,6 +317,13 @@
                 transform: none;
                 max-width: calc(100vw - 340px);
             }
+            #celestial-info {
+                right: max(12px, env(safe-area-inset-right));
+                top: auto;
+                bottom: max(64px, calc(env(safe-area-inset-bottom) + 64px));
+                width: 360px;
+                min-width: 300px;
+            }
         }
     </style>
     <!-- Import Three.js via ES Modules -->
@@ -238,6 +346,13 @@
             <button id="language-toggle" type="button">繁體中文</button>
         </div>
         <p class="subtitle" data-i18n="subtitle">A teaching scale model of the Sun, Earth, and Moon. Sizes are exaggerated to fit the screen.</p>
+
+        <div class="control-group">
+            <div class="sim-actions">
+                <button id="sim-toggle" type="button" data-i18n="startButton">Start</button>
+                <button id="reset-sim" type="button" data-i18n="resetButton">Reset</button>
+            </div>
+        </div>
         
         <div class="control-group">
             <label data-i18n="speedLabel">Simulation Speed</label>
@@ -278,6 +393,14 @@
 
     <div class="instruction" data-i18n="instruction">
         Mouse: Left Click to Rotate | Right Click to Pan | Scroll to Zoom
+    </div>
+
+    <div id="celestial-info" aria-live="polite" aria-hidden="true">
+        <div class="info-header">
+            <h2 id="celestial-info-title"></h2>
+            <button id="info-close" type="button" aria-label="Close">X</button>
+        </div>
+        <ul id="celestial-info-list"></ul>
     </div>
 
     <script type="module">
@@ -582,6 +705,7 @@
         const earthMesh = new THREE.Mesh(earthGeo, earthMat);
         earthMesh.castShadow = true;
         earthMesh.receiveShadow = true;
+        earthMesh.userData.infoKey = 'earth';
 
         const cloudGeo = new THREE.SphereGeometry(CONFIG.earthRadius * 1.025, 96, 96);
         const cloudMat = new THREE.MeshStandardMaterial({
@@ -592,6 +716,7 @@
             depthWrite: false
         });
         const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+        cloudMesh.userData.infoKey = 'earth';
 
         const meridianPoints = [];
         for (let i = 0; i <= 96; i++) {
@@ -637,6 +762,7 @@
         moonMesh.position.x = CONFIG.moonOrbitRadius;
         moonMesh.castShadow = true;
         moonMesh.receiveShadow = true;
+        moonMesh.userData.infoKey = 'moon';
         moonOrbitPivot.add(moonMesh);
 
         // --- Orbit Paths (Visual Lines) ---
@@ -668,22 +794,40 @@
 
         // --- State Variables ---
         let simTime = 0; // Represents "Days"
+        let isSimulationRunning = false;
+        let hasSimulationStarted = false;
         let isEarthFocus = false;
+        let selectedInfoKey = null;
+        let infoDragState = null;
         const earthFocusOffset = new THREE.Vector3(22, 14, 30);
         const earthWorldPos = new THREE.Vector3();
         const desiredCameraPos = new THREE.Vector3();
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const pointerStart = new THREE.Vector2();
+        const clickableObjects = [earthMesh, cloudMesh, moonMesh];
         
         // UI Elements
+        const simToggle = document.getElementById('sim-toggle');
+        const resetSim = document.getElementById('reset-sim');
         const speedSlider = document.getElementById('speed-slider');
         const daysCounter = document.getElementById('days-counter');
         const yearsCounter = document.getElementById('years-counter');
         const languageToggle = document.getElementById('language-toggle');
+        const celestialInfo = document.getElementById('celestial-info');
+        const celestialInfoTitle = document.getElementById('celestial-info-title');
+        const celestialInfoList = document.getElementById('celestial-info-list');
+        const infoClose = document.getElementById('info-close');
 
         const translations = {
             en: {
                 documentTitle: 'Sun, Earth & Moon - Simulation',
                 title: 'Celestial Mechanics',
                 subtitle: 'A teaching scale model of the Sun, Earth, and Moon. Sizes are exaggerated to fit the screen.',
+                startButton: 'Start',
+                pauseButton: 'Pause',
+                resumeButton: 'Resume',
+                resetButton: 'Reset',
                 speedLabel: 'Simulation Speed',
                 paused: 'Paused',
                 fast: 'Fast',
@@ -695,8 +839,14 @@
                 showOrbits: 'Show Orbits',
                 daysPassed: 'Days Passed:',
                 yearsPassed: 'Years Passed:',
-                instruction: 'Mouse: Left Click to Rotate | Right Click to Pan | Scroll to Zoom',
-                instructionTouch: 'Touch: Drag to Rotate | Pinch to Zoom | Two Fingers to Pan',
+                instruction: 'Mouse: Drag to Rotate | Scroll to Zoom | Click Earth or Moon for Facts',
+                instructionTouch: 'Touch: Drag to Rotate | Pinch to Zoom | Tap Earth or Moon for Facts',
+                earthInfoTitle: 'Earth',
+                moonInfoTitle: 'Moon',
+                earthAxialTiltFact: "Earth's axis is tilted 23.5 degrees.",
+                moonRotationFact: 'The Moon takes about 27 days to rotate once.',
+                moonOrbitFact: 'The Moon takes about 27 days to orbit Earth once.',
+                closeLabel: 'Close',
                 toggleButton: '繁體中文',
                 htmlLang: 'en'
             },
@@ -704,6 +854,10 @@
                 documentTitle: '太陽、地球與月球 - 模擬',
                 title: '天體運行',
                 subtitle: '太陽、地球和月球的教學比例模型。大小和距離已誇張處理，方便在畫面中觀察。',
+                startButton: '開始',
+                pauseButton: '暫停',
+                resumeButton: '繼續',
+                resetButton: '歸零',
                 speedLabel: '模擬速度',
                 paused: '暫停',
                 fast: '快速',
@@ -715,13 +869,86 @@
                 showOrbits: '顯示軌道',
                 daysPassed: '經過日數：',
                 yearsPassed: '經過年數：',
-                instruction: '滑鼠：左鍵旋轉 | 右鍵平移 | 滾輪縮放',
-                instructionTouch: '觸控：單指旋轉 | 雙指縮放及平移',
+                instruction: '滑鼠：拖曳旋轉 | 滾輪縮放 | 點擊地球或月球看資料',
+                instructionTouch: '觸控：單指旋轉 | 雙指縮放 | 點按地球或月球看資料',
+                earthInfoTitle: '地球',
+                moonInfoTitle: '月球',
+                earthAxialTiltFact: '地球地軸傾斜 23.5 度。',
+                moonRotationFact: '月球自轉一周約 27 天。',
+                moonOrbitFact: '月球繞地球公轉一周約 27 天。',
+                closeLabel: '關閉',
                 toggleButton: 'English',
                 htmlLang: 'zh-Hant'
             }
         };
         let currentLanguage = 'en';
+
+        const infoContent = {
+            earth: {
+                title: 'earthInfoTitle',
+                facts: ['earthAxialTiltFact']
+            },
+            moon: {
+                title: 'moonInfoTitle',
+                facts: ['moonRotationFact', 'moonOrbitFact']
+            }
+        };
+
+        function updateRunButton() {
+            const copy = translations[currentLanguage];
+            const labelKey = !hasSimulationStarted
+                ? 'startButton'
+                : isSimulationRunning
+                    ? 'pauseButton'
+                    : 'resumeButton';
+            simToggle.textContent = copy[labelKey];
+            simToggle.classList.toggle('active', isSimulationRunning);
+        }
+
+        function updateCounters() {
+            daysCounter.innerText = simTime.toFixed(1);
+            yearsCounter.innerText = (simTime / CONFIG.earthYearDays).toFixed(2);
+        }
+
+        function resetSimulation() {
+            simTime = 0;
+            isSimulationRunning = false;
+            hasSimulationStarted = false;
+            updateRunButton();
+            updateCounters();
+        }
+
+        function showCelestialInfo(infoKey) {
+            const content = infoContent[infoKey];
+            if (!content) return;
+            selectedInfoKey = infoKey;
+            const copy = translations[currentLanguage];
+            celestialInfoTitle.textContent = copy[content.title];
+            celestialInfoList.innerHTML = '';
+            content.facts.forEach((factKey) => {
+                const item = document.createElement('li');
+                item.textContent = copy[factKey];
+                celestialInfoList.appendChild(item);
+            });
+            celestialInfo.classList.add('visible');
+            celestialInfo.setAttribute('aria-hidden', 'false');
+        }
+
+        function hideCelestialInfo() {
+            selectedInfoKey = null;
+            celestialInfo.classList.remove('visible');
+            celestialInfo.setAttribute('aria-hidden', 'true');
+        }
+
+        function clampInfoPanel(left, top) {
+            const rect = celestialInfo.getBoundingClientRect();
+            const safeLeft = Math.max(8, Math.min(left, window.innerWidth - rect.width - 8));
+            const safeTop = Math.max(8, Math.min(top, window.innerHeight - rect.height - 8));
+            celestialInfo.style.left = `${safeLeft}px`;
+            celestialInfo.style.top = `${safeTop}px`;
+            celestialInfo.style.right = 'auto';
+            celestialInfo.style.bottom = 'auto';
+        }
 
         function applyLanguage(language) {
             currentLanguage = language;
@@ -735,6 +962,11 @@
                     : copy[key];
             });
             languageToggle.textContent = copy.toggleButton;
+            infoClose.setAttribute('aria-label', copy.closeLabel);
+            updateRunButton();
+            if (selectedInfoKey) {
+                showCelestialInfo(selectedInfoKey);
+            }
         }
 
         // --- Interaction Logic ---
@@ -786,8 +1018,71 @@
             e.target.classList.toggle('active');
         });
 
+        simToggle.addEventListener('click', () => {
+            hasSimulationStarted = true;
+            isSimulationRunning = !isSimulationRunning;
+            updateRunButton();
+        });
+
+        resetSim.addEventListener('click', resetSimulation);
+
         languageToggle.addEventListener('click', () => {
             applyLanguage(currentLanguage === 'en' ? 'zh' : 'en');
+        });
+
+        infoClose.addEventListener('click', hideCelestialInfo);
+
+        celestialInfo.querySelector('.info-header').addEventListener('pointerdown', (event) => {
+            if (event.target === infoClose) return;
+            const rect = celestialInfo.getBoundingClientRect();
+            infoDragState = {
+                startX: event.clientX,
+                startY: event.clientY,
+                left: rect.left,
+                top: rect.top
+            };
+            celestialInfo.classList.add('dragging');
+            celestialInfo.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        });
+
+        celestialInfo.addEventListener('pointermove', (event) => {
+            if (!infoDragState) return;
+            clampInfoPanel(
+                infoDragState.left + event.clientX - infoDragState.startX,
+                infoDragState.top + event.clientY - infoDragState.startY
+            );
+        });
+
+        celestialInfo.addEventListener('pointerup', (event) => {
+            if (!infoDragState) return;
+            infoDragState = null;
+            celestialInfo.classList.remove('dragging');
+            celestialInfo.releasePointerCapture(event.pointerId);
+        });
+
+        celestialInfo.addEventListener('pointercancel', () => {
+            infoDragState = null;
+            celestialInfo.classList.remove('dragging');
+        });
+
+        renderer.domElement.addEventListener('pointerdown', (event) => {
+            pointerStart.set(event.clientX, event.clientY);
+        });
+
+        renderer.domElement.addEventListener('pointerup', (event) => {
+            const dragDistance = pointerStart.distanceTo(new THREE.Vector2(event.clientX, event.clientY));
+            if (dragDistance > 8) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            const hits = raycaster.intersectObjects(clickableObjects, false);
+            if (hits.length > 0) {
+                showCelestialInfo(hits[0].object.userData.infoKey);
+            }
         });
 
         applyLanguage(currentLanguage);
@@ -803,7 +1098,9 @@
             
             // Advance simulation time
             // timeScale of 1 means 1 day passes every second in real time
-            simTime += delta * timeScale;
+            if (isSimulationRunning) {
+                simTime += delta * timeScale;
+            }
 
             // --- Update Rotations and Positions based on specific ratios ---
             
@@ -834,8 +1131,7 @@
             }
 
             // --- Update UI ---
-            daysCounter.innerText = simTime.toFixed(1);
-            yearsCounter.innerText = (simTime / CONFIG.earthYearDays).toFixed(2);
+            updateCounters();
 
             // Render
             controls.update();
