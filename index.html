@@ -149,6 +149,32 @@
             font-size: 0.85rem;
             line-height: 1.5;
         }
+        #facts-help {
+            width: 100%;
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(77, 166, 255, 0.12);
+            color: #dcecff;
+            border-color: rgba(77, 166, 255, 0.72);
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        #facts-help::before {
+            content: "i";
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 20px;
+            width: 20px;
+            height: 20px;
+            border: 1.5px solid currentColor;
+            border-radius: 50%;
+            font-family: Georgia, serif;
+            font-weight: 700;
+            font-size: 0.82rem;
+        }
         .stat-row {
             display: flex;
             justify-content: space-between;
@@ -342,10 +368,10 @@
 
     <div id="ui-container">
         <div class="panel-header">
-            <h1 data-i18n="title">Celestial Mechanics</h1>
+            <h1 data-i18n="title">The Motion of the Sun, Earth, and Moon</h1>
             <button id="language-toggle" type="button">繁體中文</button>
         </div>
-        <p class="subtitle" data-i18n="subtitle">A teaching scale model of the Sun, Earth, and Moon. Sizes are exaggerated to fit the screen.</p>
+        <p class="subtitle" data-i18n="subtitle">A teaching-scale model of the Sun, Earth, and Moon that is not to scale. The sizes and distances have been exaggerated for easy observation on the screen.</p>
 
         <div class="control-group">
             <div class="sim-actions">
@@ -388,6 +414,7 @@
                 <span data-i18n="yearsPassed">Years Passed:</span>
                 <span id="years-counter" class="stat-value">0.00</span>
             </div>
+            <button id="facts-help" type="button" data-i18n="factsHint">Click Earth or Moon for Facts</button>
         </div>
     </div>
 
@@ -814,6 +841,7 @@
         const daysCounter = document.getElementById('days-counter');
         const yearsCounter = document.getElementById('years-counter');
         const languageToggle = document.getElementById('language-toggle');
+        const factsHelp = document.getElementById('facts-help');
         const celestialInfo = document.getElementById('celestial-info');
         const celestialInfoTitle = document.getElementById('celestial-info-title');
         const celestialInfoList = document.getElementById('celestial-info-list');
@@ -821,9 +849,9 @@
 
         const translations = {
             en: {
-                documentTitle: 'Sun, Earth & Moon - Simulation',
-                title: 'Celestial Mechanics',
-                subtitle: 'A teaching scale model of the Sun, Earth, and Moon. Sizes are exaggerated to fit the screen.',
+                documentTitle: 'The Motion of the Sun, Earth, and Moon - Simulation',
+                title: 'The Motion of the Sun, Earth, and Moon',
+                subtitle: 'A teaching-scale model of the Sun, Earth, and Moon that is not to scale. The sizes and distances have been exaggerated for easy observation on the screen.',
                 startButton: 'Start',
                 pauseButton: 'Pause',
                 resumeButton: 'Resume',
@@ -839,8 +867,11 @@
                 showOrbits: 'Show Orbits',
                 daysPassed: 'Days Passed:',
                 yearsPassed: 'Years Passed:',
-                instruction: 'Mouse: Drag to Rotate | Scroll to Zoom | Click Earth or Moon for Facts',
-                instructionTouch: 'Touch: Drag to Rotate | Pinch to Zoom | Tap Earth or Moon for Facts',
+                factsHint: 'Click Earth or Moon for Facts',
+                moreInfoTitle: 'More Information',
+                moreInfoFact: 'Click or tap Earth or Moon in the model to view facts about it.',
+                instruction: 'Mouse: Drag to Rotate | Scroll to Zoom',
+                instructionTouch: 'Touch: Drag to Rotate | Pinch to Zoom',
                 earthInfoTitle: 'Earth',
                 moonInfoTitle: 'Moon',
                 earthAxialTiltFact: "Earth's axis is tilted 23.5 degrees.",
@@ -851,9 +882,9 @@
                 htmlLang: 'en'
             },
             zh: {
-                documentTitle: '太陽、地球與月球 - 模擬',
-                title: '天體運行',
-                subtitle: '太陽、地球和月球的教學比例模型。大小和距離已誇張處理，方便在畫面中觀察。',
+                documentTitle: '太陽、地球和月球的運動 - 模擬',
+                title: '太陽、地球和月球的運動',
+                subtitle: '這是一個太陽、地球和月球的教學比例模型，並非按實際比例呈現。大小和距離已經誇張處理，方便在畫面中觀察。',
                 startButton: '開始',
                 pauseButton: '暫停',
                 resumeButton: '繼續',
@@ -869,8 +900,11 @@
                 showOrbits: '顯示軌道',
                 daysPassed: '經過日數：',
                 yearsPassed: '經過年數：',
-                instruction: '滑鼠：拖曳旋轉 | 滾輪縮放 | 點擊地球或月球看資料',
-                instructionTouch: '觸控：單指旋轉 | 雙指縮放 | 點按地球或月球看資料',
+                factsHint: '點擊地球或月球查看資料',
+                moreInfoTitle: '更多資料',
+                moreInfoFact: '請在模型中點擊或點按地球或月球，即可查看相關資料。',
+                instruction: '滑鼠：拖曳旋轉 | 滾輪縮放',
+                instructionTouch: '觸控：單指旋轉 | 雙指縮放',
                 earthInfoTitle: '地球',
                 moonInfoTitle: '月球',
                 earthAxialTiltFact: '地球地軸傾斜 23.5 度。',
@@ -884,6 +918,10 @@
         let currentLanguage = 'en';
 
         const infoContent = {
+            help: {
+                title: 'moreInfoTitle',
+                facts: ['moreInfoFact']
+            },
             earth: {
                 title: 'earthInfoTitle',
                 facts: ['earthAxialTiltFact']
@@ -1031,6 +1069,7 @@
         });
 
         infoClose.addEventListener('click', hideCelestialInfo);
+        factsHelp.addEventListener('click', () => showCelestialInfo('help'));
 
         celestialInfo.querySelector('.info-header').addEventListener('pointerdown', (event) => {
             if (event.target === infoClose) return;
