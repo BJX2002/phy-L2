@@ -36,6 +36,9 @@
             height: 100%;
             touch-action: none;
         }
+        #mobile-controls-toggle {
+            display: none;
+        }
         #ui-container {
             position: absolute;
             top: max(20px, env(safe-area-inset-top));
@@ -351,6 +354,112 @@
                 min-width: 300px;
             }
         }
+        @media (max-width: 600px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+            #mobile-controls-toggle {
+                position: fixed;
+                z-index: 40;
+                top: max(12px, env(safe-area-inset-top));
+                left: max(12px, env(safe-area-inset-left));
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: auto;
+                min-width: 112px;
+                min-height: 48px;
+                padding: 9px 14px;
+                flex: none;
+                background: rgba(24, 53, 91, 0.94);
+                border-color: #67b3ff;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.42);
+                backdrop-filter: blur(8px);
+                font-size: 0.9rem;
+                font-weight: 700;
+            }
+            #ui-container {
+                position: fixed;
+                z-index: 35;
+                top: auto;
+                left: max(8px, env(safe-area-inset-left));
+                right: max(8px, env(safe-area-inset-right));
+                bottom: max(8px, env(safe-area-inset-bottom));
+                width: auto;
+                max-width: none;
+                max-height: min(72dvh, 620px);
+                padding: 16px;
+                border-radius: 10px;
+                background: rgba(15, 20, 30, 0.96);
+                opacity: 0;
+                transform: translateY(calc(100% + 28px));
+                pointer-events: none;
+                transition: transform 0.24s ease, opacity 0.2s ease;
+            }
+            body.mobile-controls-open #ui-container {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            body.mobile-controls-open .instruction {
+                opacity: 0;
+            }
+            #ui-container button,
+            #ui-container input[type="range"] {
+                min-height: 46px;
+            }
+            .panel-header {
+                align-items: flex-start;
+            }
+            h1 {
+                font-size: 1.05rem;
+            }
+            p.subtitle {
+                font-size: 0.8rem;
+            }
+            #celestial-info {
+                left: max(10px, env(safe-area-inset-left));
+                right: max(10px, env(safe-area-inset-right));
+                top: 50%;
+                bottom: auto;
+                width: auto;
+                min-width: 0;
+                min-height: 0;
+                max-width: none;
+                max-height: min(72dvh, 560px);
+                padding: 18px;
+                resize: none;
+                transform: translateY(calc(-50% - 8px));
+            }
+            #celestial-info.visible {
+                transform: translateY(-50%);
+            }
+            #celestial-info::after {
+                display: none;
+            }
+            #celestial-info h2 {
+                font-size: 1.2rem;
+            }
+            #celestial-info ul {
+                font-size: 1rem;
+            }
+            .info-header {
+                cursor: default;
+            }
+            .instruction {
+                bottom: max(10px, env(safe-area-inset-bottom));
+                max-width: calc(100vw - 20px);
+                padding: 7px 11px;
+                font-size: 0.72rem;
+                white-space: normal;
+                transition: opacity 0.18s ease;
+            }
+        }
+        @media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+            #ui-container {
+                max-height: calc(100dvh - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            }
+            #celestial-info {
+                max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            }
+        }
     </style>
     <!-- Import Three.js via ES Modules -->
     <script type="importmap">
@@ -365,6 +474,8 @@
 <body>
 
     <div id="canvas-container"></div>
+
+    <button id="mobile-controls-toggle" type="button" aria-controls="ui-container" aria-expanded="false">Controls</button>
 
     <div id="ui-container">
         <div class="panel-header">
@@ -455,6 +566,7 @@
         // --- Scene Setup ---
         const container = document.getElementById('canvas-container');
         const prefersTouchInput = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+        const isPhoneViewport = () => window.innerWidth <= 600 || (prefersTouchInput && window.innerHeight <= 500);
         document.body.classList.toggle('touch-device', prefersTouchInput);
         const scene = new THREE.Scene();
 
@@ -617,7 +729,9 @@
         const initialHeight = container.clientHeight || window.innerHeight;
         const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 1000);
         const setSystemCameraPosition = (width, height) => {
-            if (width / height < 0.9) {
+            if (isPhoneViewport() && width / height < 0.62) {
+                camera.position.set(0, 260, 560);
+            } else if (width / height < 0.9) {
                 camera.position.set(0, 120, 235);
             } else {
                 camera.position.set(0, 80, 120);
@@ -646,7 +760,7 @@
         controls.zoomSpeed = prefersTouchInput ? 0.85 : 1;
         controls.panSpeed = prefersTouchInput ? 0.7 : 1;
         controls.minDistance = 18;
-        controls.maxDistance = 400;
+        controls.maxDistance = isPhoneViewport() ? 700 : 400;
 
         // --- Celestial Bodies ---
 
@@ -826,8 +940,12 @@
         let isEarthFocus = false;
         let selectedInfoKey = null;
         let infoDragState = null;
+        let mobileControlsOpen = false;
         const earthFocusOffset = new THREE.Vector3(22, 14, 30);
         const earthWorldPos = new THREE.Vector3();
+        const moonWorldPos = new THREE.Vector3();
+        const projectedEarthPos = new THREE.Vector3();
+        const projectedMoonPos = new THREE.Vector3();
         const desiredCameraPos = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
@@ -841,6 +959,7 @@
         const daysCounter = document.getElementById('days-counter');
         const yearsCounter = document.getElementById('years-counter');
         const languageToggle = document.getElementById('language-toggle');
+        const mobileControlsToggle = document.getElementById('mobile-controls-toggle');
         const factsHelp = document.getElementById('facts-help');
         const celestialInfo = document.getElementById('celestial-info');
         const celestialInfoTitle = document.getElementById('celestial-info-title');
@@ -870,6 +989,8 @@
                 factsHint: 'Click Earth or Moon for Facts',
                 moreInfoTitle: 'More Information',
                 moreInfoFact: 'Click or tap Earth or Moon in the model to view facts about it.',
+                openControlsButton: 'Controls',
+                closeControlsButton: 'Close Controls',
                 instruction: 'Mouse: Drag to Rotate | Scroll to Zoom',
                 instructionTouch: 'Touch: Drag to Rotate | Pinch to Zoom',
                 earthInfoTitle: 'Earth',
@@ -903,6 +1024,8 @@
                 factsHint: '點擊地球或月球查看資料',
                 moreInfoTitle: '更多資料',
                 moreInfoFact: '請在模型中點擊或點按地球或月球，即可查看相關資料。',
+                openControlsButton: '控制面板',
+                closeControlsButton: '關閉面板',
                 instruction: '滑鼠：拖曳旋轉 | 滾輪縮放',
                 instructionTouch: '觸控：單指旋轉 | 雙指縮放',
                 earthInfoTitle: '地球',
@@ -948,6 +1071,20 @@
             yearsCounter.innerText = (simTime / CONFIG.earthYearDays).toFixed(2);
         }
 
+        function updateMobileControlsToggle() {
+            const copy = translations[currentLanguage];
+            mobileControlsToggle.textContent = mobileControlsOpen
+                ? copy.closeControlsButton
+                : copy.openControlsButton;
+            mobileControlsToggle.setAttribute('aria-expanded', String(mobileControlsOpen));
+        }
+
+        function setMobileControlsOpen(open) {
+            mobileControlsOpen = isPhoneViewport() && Boolean(open);
+            document.body.classList.toggle('mobile-controls-open', mobileControlsOpen);
+            updateMobileControlsToggle();
+        }
+
         function resetSimulation() {
             simTime = 0;
             isSimulationRunning = false;
@@ -959,6 +1096,9 @@
         function showCelestialInfo(infoKey) {
             const content = infoContent[infoKey];
             if (!content) return;
+            if (isPhoneViewport()) {
+                setMobileControlsOpen(false);
+            }
             selectedInfoKey = infoKey;
             const copy = translations[currentLanguage];
             celestialInfoTitle.textContent = copy[content.title];
@@ -1002,6 +1142,7 @@
             languageToggle.textContent = copy.toggleButton;
             infoClose.setAttribute('aria-label', copy.closeLabel);
             updateRunButton();
+            updateMobileControlsToggle();
             if (selectedInfoKey) {
                 showCelestialInfo(selectedInfoKey);
             }
@@ -1014,6 +1155,9 @@
         function onWindowResize() {
             const width = container.clientWidth || window.innerWidth;
             const height = container.clientHeight || window.innerHeight;
+            if (!isPhoneViewport() && mobileControlsOpen) {
+                setMobileControlsOpen(false);
+            }
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
             renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prefersTouchInput ? 1.5 : 2));
@@ -1038,152 +1182,4 @@
             e.target.classList.add('active');
             document.getElementById('cam-system').classList.remove('active');
             earthMesh.getWorldPosition(earthWorldPos);
-            earthFocusOffset.copy(camera.position).sub(earthWorldPos);
-            const currentDistance = earthFocusOffset.length();
-            if (currentDistance < 18 || currentDistance > 72) {
-                earthFocusOffset.set(22, 14, 30);
-            }
-        });
-
-        document.getElementById('toggle-axis').addEventListener('click', (e) => {
-            axisMesh.visible = !axisMesh.visible;
-            e.target.classList.toggle('active');
-        });
-
-        document.getElementById('toggle-orbits').addEventListener('click', (e) => {
-            earthOrbitLine.visible = !earthOrbitLine.visible;
-            moonOrbitLineContainer.visible = !moonOrbitLineContainer.visible;
-            e.target.classList.toggle('active');
-        });
-
-        simToggle.addEventListener('click', () => {
-            hasSimulationStarted = true;
-            isSimulationRunning = !isSimulationRunning;
-            updateRunButton();
-        });
-
-        resetSim.addEventListener('click', resetSimulation);
-
-        languageToggle.addEventListener('click', () => {
-            applyLanguage(currentLanguage === 'en' ? 'zh' : 'en');
-        });
-
-        infoClose.addEventListener('click', hideCelestialInfo);
-        factsHelp.addEventListener('click', () => showCelestialInfo('help'));
-
-        celestialInfo.querySelector('.info-header').addEventListener('pointerdown', (event) => {
-            if (event.target === infoClose) return;
-            const rect = celestialInfo.getBoundingClientRect();
-            infoDragState = {
-                startX: event.clientX,
-                startY: event.clientY,
-                left: rect.left,
-                top: rect.top
-            };
-            celestialInfo.classList.add('dragging');
-            celestialInfo.setPointerCapture(event.pointerId);
-            event.preventDefault();
-        });
-
-        celestialInfo.addEventListener('pointermove', (event) => {
-            if (!infoDragState) return;
-            clampInfoPanel(
-                infoDragState.left + event.clientX - infoDragState.startX,
-                infoDragState.top + event.clientY - infoDragState.startY
-            );
-        });
-
-        celestialInfo.addEventListener('pointerup', (event) => {
-            if (!infoDragState) return;
-            infoDragState = null;
-            celestialInfo.classList.remove('dragging');
-            celestialInfo.releasePointerCapture(event.pointerId);
-        });
-
-        celestialInfo.addEventListener('pointercancel', () => {
-            infoDragState = null;
-            celestialInfo.classList.remove('dragging');
-        });
-
-        renderer.domElement.addEventListener('pointerdown', (event) => {
-            pointerStart.set(event.clientX, event.clientY);
-        });
-
-        renderer.domElement.addEventListener('pointerup', (event) => {
-            const dragDistance = pointerStart.distanceTo(new THREE.Vector2(event.clientX, event.clientY));
-            if (dragDistance > 8) return;
-
-            const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(pointer, camera);
-
-            const hits = raycaster.intersectObjects(clickableObjects, false);
-            if (hits.length > 0) {
-                showCelestialInfo(hits[0].object.userData.infoKey);
-            }
-        });
-
-        applyLanguage(currentLanguage);
-
-        // --- Animation Loop ---
-        const clock = new THREE.Clock();
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const delta = clock.getDelta();
-            const timeScale = parseFloat(speedSlider.value);
-            
-            // Advance simulation time
-            // timeScale of 1 means 1 day passes every second in real time
-            if (isSimulationRunning) {
-                simTime += delta * timeScale;
-            }
-
-            // --- Update Rotations and Positions based on specific ratios ---
-            
-            // 1. Earth's Orbit around Sun (Year)
-            // 360 degrees (2 PI) / 365.25 days = radians per day
-            earthOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthYearDays);
-            sunMesh.rotation.y = simTime * 0.18;
-            sunGlow.rotation.y = -simTime * 0.08;
-            sunCorona.rotation.y = simTime * 0.04;
-
-            // 2. Earth's Rotation on Axis (Day)
-            // 360 degrees (2 PI) / 1 day
-            earthMesh.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthDayRotation);
-            cloudMesh.rotation.y = earthMesh.rotation.y * 1.08;
-
-            // 3. Moon's Orbit around Earth (Month)
-            moonOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.moonOrbitDays);
-
-            // 4. Moon's Synchronous Rotation (Always shows same face to Earth)
-            moonMesh.rotation.y = moonOrbitPivot.rotation.y;
-
-            // --- Camera Following Logic ---
-            if (isEarthFocus) {
-                earthMesh.getWorldPosition(earthWorldPos);
-                desiredCameraPos.copy(earthWorldPos).add(earthFocusOffset);
-                controls.target.lerp(earthWorldPos, 0.14);
-                camera.position.lerp(desiredCameraPos, 0.14);
-            }
-
-            // --- Update UI ---
-            updateCounters();
-
-            // Render
-            controls.update();
-            if (isEarthFocus) {
-                earthFocusOffset.copy(camera.position).sub(controls.target);
-            }
-            renderer.render(scene, camera);
-        }
-
-        // Start the loop after window load
-        window.onload = function() {
-            animate();
-        };
-    </script>
-</body>
-</html>
+            earthFocusOffset.copy(camera.position).sub(eart
