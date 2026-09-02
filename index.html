@@ -1182,4 +1182,180 @@
             e.target.classList.add('active');
             document.getElementById('cam-system').classList.remove('active');
             earthMesh.getWorldPosition(earthWorldPos);
-            earthFocusOffset.copy(camera.position).sub(eart
+            earthFocusOffset.copy(camera.position).sub(earthWorldPos);
+            const currentDistance = earthFocusOffset.length();
+            if (currentDistance < 18 || currentDistance > 72) {
+                earthFocusOffset.set(22, 14, 30);
+            }
+        });
+
+        document.getElementById('toggle-axis').addEventListener('click', (e) => {
+            axisMesh.visible = !axisMesh.visible;
+            e.target.classList.toggle('active');
+        });
+
+        document.getElementById('toggle-orbits').addEventListener('click', (e) => {
+            earthOrbitLine.visible = !earthOrbitLine.visible;
+            moonOrbitLineContainer.visible = !moonOrbitLineContainer.visible;
+            e.target.classList.toggle('active');
+        });
+
+        simToggle.addEventListener('click', () => {
+            hasSimulationStarted = true;
+            isSimulationRunning = !isSimulationRunning;
+            updateRunButton();
+        });
+
+        resetSim.addEventListener('click', resetSimulation);
+
+        languageToggle.addEventListener('click', () => {
+            applyLanguage(currentLanguage === 'en' ? 'zh' : 'en');
+        });
+
+        mobileControlsToggle.addEventListener('click', () => {
+            setMobileControlsOpen(!mobileControlsOpen);
+        });
+
+        infoClose.addEventListener('click', hideCelestialInfo);
+        factsHelp.addEventListener('click', () => showCelestialInfo('help'));
+
+        celestialInfo.querySelector('.info-header').addEventListener('pointerdown', (event) => {
+            if (event.target === infoClose || isPhoneViewport()) return;
+            const rect = celestialInfo.getBoundingClientRect();
+            infoDragState = {
+                startX: event.clientX,
+                startY: event.clientY,
+                left: rect.left,
+                top: rect.top
+            };
+            celestialInfo.classList.add('dragging');
+            celestialInfo.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        });
+
+        celestialInfo.addEventListener('pointermove', (event) => {
+            if (!infoDragState) return;
+            clampInfoPanel(
+                infoDragState.left + event.clientX - infoDragState.startX,
+                infoDragState.top + event.clientY - infoDragState.startY
+            );
+        });
+
+        celestialInfo.addEventListener('pointerup', (event) => {
+            if (!infoDragState) return;
+            infoDragState = null;
+            celestialInfo.classList.remove('dragging');
+            celestialInfo.releasePointerCapture(event.pointerId);
+        });
+
+        celestialInfo.addEventListener('pointercancel', () => {
+            infoDragState = null;
+            celestialInfo.classList.remove('dragging');
+        });
+
+        renderer.domElement.addEventListener('pointerdown', (event) => {
+            pointerStart.set(event.clientX, event.clientY);
+        });
+
+        renderer.domElement.addEventListener('pointerup', (event) => {
+            const dragDistance = pointerStart.distanceTo(new THREE.Vector2(event.clientX, event.clientY));
+            if (dragDistance > 8) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            const hits = raycaster.intersectObjects(clickableObjects, false);
+            if (hits.length > 0) {
+                showCelestialInfo(hits[0].object.userData.infoKey);
+            } else if (isPhoneViewport()) {
+                earthMesh.getWorldPosition(earthWorldPos);
+                moonMesh.getWorldPosition(moonWorldPos);
+                projectedEarthPos.copy(earthWorldPos).project(camera);
+                projectedMoonPos.copy(moonWorldPos).project(camera);
+
+                const tapX = event.clientX - rect.left;
+                const tapY = event.clientY - rect.top;
+                const earthTapDistance = Math.hypot(
+                    tapX - (projectedEarthPos.x * 0.5 + 0.5) * rect.width,
+                    tapY - (-projectedEarthPos.y * 0.5 + 0.5) * rect.height
+                );
+                const moonTapDistance = Math.hypot(
+                    tapX - (projectedMoonPos.x * 0.5 + 0.5) * rect.width,
+                    tapY - (-projectedMoonPos.y * 0.5 + 0.5) * rect.height
+                );
+                const nearestInfo = earthTapDistance <= moonTapDistance
+                    ? { key: 'earth', distance: earthTapDistance }
+                    : { key: 'moon', distance: moonTapDistance };
+
+                if (nearestInfo.distance <= 38) {
+                    showCelestialInfo(nearestInfo.key);
+                }
+            }
+        });
+
+        applyLanguage(currentLanguage);
+        setMobileControlsOpen(false);
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const timeScale = parseFloat(speedSlider.value);
+            
+            // Advance simulation time
+            // timeScale of 1 means 1 day passes every second in real time
+            if (isSimulationRunning) {
+                simTime += delta * timeScale;
+            }
+
+            // --- Update Rotations and Positions based on specific ratios ---
+            
+            // 1. Earth's Orbit around Sun (Year)
+            // 360 degrees (2 PI) / 365.25 days = radians per day
+            earthOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthYearDays);
+            sunMesh.rotation.y = simTime * 0.18;
+            sunGlow.rotation.y = -simTime * 0.08;
+            sunCorona.rotation.y = simTime * 0.04;
+
+            // 2. Earth's Rotation on Axis (Day)
+            // 360 degrees (2 PI) / 1 day
+            earthMesh.rotation.y = simTime * ((2 * Math.PI) / CONFIG.earthDayRotation);
+            cloudMesh.rotation.y = earthMesh.rotation.y * 1.08;
+
+            // 3. Moon's Orbit around Earth (Month)
+            moonOrbitPivot.rotation.y = simTime * ((2 * Math.PI) / CONFIG.moonOrbitDays);
+
+            // 4. Moon's Synchronous Rotation (Always shows same face to Earth)
+            moonMesh.rotation.y = moonOrbitPivot.rotation.y;
+
+            // --- Camera Following Logic ---
+            if (isEarthFocus) {
+                earthMesh.getWorldPosition(earthWorldPos);
+                desiredCameraPos.copy(earthWorldPos).add(earthFocusOffset);
+                controls.target.lerp(earthWorldPos, 0.14);
+                camera.position.lerp(desiredCameraPos, 0.14);
+            }
+
+            // --- Update UI ---
+            updateCounters();
+
+            // Render
+            controls.update();
+            if (isEarthFocus) {
+                earthFocusOffset.copy(camera.position).sub(controls.target);
+            }
+            renderer.render(scene, camera);
+        }
+
+        // Start the loop after window load
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
